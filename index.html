@@ -359,6 +359,22 @@
             }
         }
 
+        function playerRotate(dir) {
+            const pos = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, dir);
+            // 壁蹴り（Wall Kick）処理: 回転して壁にめり込んだら左右にずらす
+            while (collide(board, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -dir); // どうしても回せない場合は元に戻す
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+        }
+
         function playerHold() {
             if (!canHold) return;
             
