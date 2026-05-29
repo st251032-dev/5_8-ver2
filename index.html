@@ -10,8 +10,47 @@
         
         body {
             font-family: 'M PLUS Rounded 1c', sans-serif;
-            background: radial-gradient(circle at center, #2d0a31 0%, #0a0010 100%);
+            background: linear-gradient(-45deg, #2d0a31, #0a0010, #4a0024, #1a0018);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
             overscroll-behavior-y: none;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake {
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes flash {
+            0% { background-color: rgba(255, 20, 147, 0.4); }
+            100% { background-color: transparent; }
+        }
+        .flash-effect::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: transparent;
+            animation: flash 0.5s ease-out;
+            pointer-events: none;
+            z-index: 50;
         }
 
         #game-board {
@@ -49,7 +88,7 @@
         }
     </style>
 </head>
-<body class="text-pink-300 h-screen flex flex-col items-center justify-center overflow-hidden touch-none select-none">
+<body class="text-pink-300 h-screen flex flex-col items-center justify-center overflow-hidden touch-none select-none relative">
 
     <div class="w-full max-w-sm flex flex-col items-center">
         <!-- Header -->
@@ -79,7 +118,7 @@
 
                 <!-- Game Over / Start Screen -->
                 <div id="start-screen" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded z-20">
-                    <p class="text-xl text-pink-300 mb-4 text-center px-2">優しく<br>操作してね…♡</p>
+                    <p class="text-xl text-pink-300 mb-4 text-center px-2">あなたの指先で…<br>イかせて…♡</p>
                     <button id="btn-start" class="control-btn px-6 py-2 rounded-full font-bold text-lg">はじめる</button>
                 </div>
             </div>
@@ -191,6 +230,10 @@
         let isGameOver = true;
         let animationId;
 
+        // ★追加: 潮吹き用のパーティクル配列
+        let particles = [];
+        let hardDropCount = 0; // ★追加: ハードドロップの回数を記録
+
         const player = {
             pos: {x: 0, y: 0},
             matrix: null,
@@ -198,17 +241,16 @@
             lines: 0
         };
 
-        const messages = [
-            "ステキ…♡",
-            "いい感じ…！",
-            "もっと…♡",
-            "すごい…！",
-            "その調子よ♡",
-            "あぁん…最高…♡"
-        ];
+        const messages = {
+            1: ["んっ…♡", "あっ…♡", "いいよ…♡", "ステキ…♡"],
+            2: ["あぁんっ…♡", "そこ…いいっ♡", "もっと…♡", "気持ちいい…♡"],
+            3: ["激しいっ…♡", "きちゃう…！", "壊れちゃう…♡", "すごいっ…！"],
+            4: ["イクッ…！！♡♡", "あぁぁあっ…♡♡", "奥まで…きちゃったぁ♡", "最高ぉっ…！！♡♡"]
+        };
 
-        function showMessage() {
-            const msg = messages[Math.floor(Math.random() * messages.length)];
+        function showMessage(linesCleared) {
+            const msgs = messages[linesCleared] || messages[4];
+            const msg = msgs[Math.floor(Math.random() * msgs.length)];
             messageText.innerText = msg;
             messageOverlay.classList.remove('opacity-0', 'scale-50');
             messageOverlay.classList.add('opacity-100', 'scale-100');
@@ -221,6 +263,61 @@
                     messageOverlay.classList.add('scale-50');
                 }, 500);
             }, 1000);
+        }
+
+        // ★追加: 潮吹きエフェクト生成
+        function createSplash(x, y, width) {
+            // 基本量に加えて、ハードドロップの回数(hardDropCount)に応じて激増させる
+            let baseAmount = 100 + Math.random() * 100;
+            let bonusAmount = hardDropCount * 80; // 1回につき80個増加
+            if (bonusAmount > 800) bonusAmount = 800; // 重くなりすぎないよう上限を設定
+            
+            const numParticles = baseAmount + bonusAmount;
+            
+            // 回数に応じて勢い(高さと広がり)も増す
+            let extraPower = Math.min(hardDropCount * 0.3, 4.0);
+
+            for (let i = 0; i < numParticles; i++) {
+                particles.push({
+                    x: x + Math.random() * width, // ブロックの幅に合わせて散らす
+                    y: y,
+                    vx: (Math.random() - 0.5) * (1.5 + extraPower * 0.3), // 左右の広がり（回数でさらに広く）
+                    vy: -(Math.random() * 4.0 + 1.5 + extraPower), // 上方向へ吹き出す勢い（回数でさらに高く）
+                    life: 1.2, // 少し長持ちさせる
+                    decay: 0.015 + Math.random() * 0.02, // 消えゆく早さ（ゆっくりに）
+                    size: 0.15 + Math.random() * 0.35, // 水滴のサイズ（少し大きめに）
+                    color: Math.random() > 0.25 ? '#ffffff' : '#ffb6c1' // 白多め、ピンク少々
+                });
+            }
+        }
+
+        // ★追加: 潮の描画と動き
+        function drawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.06; // 重力で落ちてくる
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.globalAlpha = p.life * 0.8; // 少し透明感
+                    ctx.fillStyle = p.color;
+                    
+                    // 光彩エフェクト
+                    ctx.shadowBlur = 5;
+                    ctx.shadowColor = p.color;
+                    
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1.0;
+                }
+            }
         }
 
         // 描画処理
@@ -282,6 +379,9 @@
             if (player.matrix) {
                 drawMatrix(player.matrix, player.pos);
             }
+
+            // ★追加: 潮をブロックの手前に描画
+            drawParticles();
         }
 
         // 衝突判定
@@ -339,11 +439,50 @@
         }
 
         function playerHardDrop() {
+            hardDropCount++; // ★追加: ハードドロップするたびにカウントアップ♡
+
             while (!collide(board, player)) {
                 player.pos.y++;
             }
             player.pos.y--;
             merge(board, player);
+            
+            // ★追加: 落下地点を計算して潮を吹かせる
+            let bottomY = player.pos.y;
+            let leftX = player.pos.x + player.matrix[0].length;
+            let rightX = player.pos.x;
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        if (player.pos.y + y > bottomY) bottomY = player.pos.y + y;
+                        if (player.pos.x + x < leftX) leftX = player.pos.x + x;
+                        if (player.pos.x + x > rightX) rightX = player.pos.x + x;
+                    }
+                });
+            });
+            const splashWidth = rightX - leftX + 1;
+            createSplash(leftX, bottomY + 1, splashWidth);
+
+            // ★追加: ハードな刺激で思わず声が漏れる演出 (30%の確率)
+            if (Math.random() > 0.7) {
+                const splashMsgs = ["ビュッ…！♡", "ああっ…出ちゃうっ♡", "奥まで…ドクンって…っ！♡"];
+                messageText.innerText = splashMsgs[Math.floor(Math.random() * splashMsgs.length)];
+                messageOverlay.classList.remove('opacity-0', 'scale-50');
+                messageOverlay.classList.add('opacity-100', 'scale-100');
+                setTimeout(() => {
+                    messageOverlay.classList.remove('opacity-100', 'scale-100');
+                    messageOverlay.classList.add('opacity-0', 'scale-150');
+                    setTimeout(() => {
+                        messageOverlay.classList.remove('scale-150');
+                        messageOverlay.classList.add('scale-50');
+                    }, 500);
+                }, 800);
+            }
+
+            // ハードドロップ時の振動エフェクト
+            document.body.classList.add('shake');
+            setTimeout(() => document.body.classList.remove('shake'), 300);
+
             canHold = true; // 着地したらホールド権を復活
             drawHold();
             playerReset();
@@ -411,8 +550,8 @@
             if (collide(board, player)) {
                 isGameOver = true;
                 startScreen.style.display = 'flex';
-                startScreen.querySelector('p').innerHTML = `あーん、<br>いっちゃった…♡<br><span class="text-sm">Score: ${player.score}</span>`;
-                btnStart.innerText = "もう一回する？";
+                startScreen.querySelector('p').innerHTML = `あぁんっ…もうダメぇ…♡<br>イッちゃった…♡<br><span class="text-sm">Score: ${player.score}</span>`;
+                btnStart.innerText = "もう一回…シる？";
             }
         }
 
@@ -436,7 +575,12 @@
             }
 
             if (linesCleared > 0) {
-                showMessage();
+                showMessage(linesCleared);
+                
+                // ライン消去時のフラッシュエフェクト
+                document.body.classList.add('flash-effect');
+                setTimeout(() => document.body.classList.remove('flash-effect'), 500);
+
                 // 少しスピードアップ
                 dropInterval = Math.max(100, 1000 - (player.score * 0.5));
             }
@@ -465,6 +609,8 @@
         function startGame() {
             board.forEach(row => row.fill(0));
             player.score = 0;
+            particles = []; // ★追加: パーティクルをリセット
+            hardDropCount = 0; // ★追加: ハードドロップ回数もリセット
             dropInterval = 1000;
             updateScore();
             isGameOver = false;
